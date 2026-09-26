@@ -24,6 +24,7 @@ impl Default for NewsConfig {
     fn default() -> Self {
         Self {
             feeds: vec![
+                "https://nerimasoft.co.uk/feed.xml".into(),
                 "https://news.ycombinator.com/rss".into(),
                 "https://www.theverge.com/rss/index.xml".into(),
             ],

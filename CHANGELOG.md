@@ -3,6 +3,11 @@
 All notable changes to mado-news are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.3] - 2026-09-26
+
+### Changed
+- NerimaSoft feed (`https://nerimasoft.co.uk/feed.xml`) added to the default feed list
+
 ## [0.1.2] - 2026-09-26
 
 ### Added
