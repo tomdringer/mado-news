@@ -215,7 +215,8 @@ fn url_to_source_name(url: &str) -> String {
         "feeds.bbci.co.uk"     => return "BBC".into(),
         "feeds.reuters.com"    => return "Reuters".into(),
         "feeds.arstechnica.com"=> return "Ars Technica".into(),
-        "news.sky.com"         => return "Sky News".into(),
+        "feeds.skynews.com"         => return "Sky News".into(),
+        "news-api.cf.sky.com"       => return "Sky News".into(),
         _ => {}
     }
     // Generic: take the first meaningful domain component
@@ -428,12 +429,18 @@ fn render(state: &State, font: &fontdue::Font, nerd: &fontdue::Font, out: &mut i
     let icon_y = header_h - (fs * 0.5) as usize;
     c.text(nerd, "\u{F09E}", fs, PAD_X, icon_y, ACCENT);
     c.text(font, "NEWS", label_size, PAD_X + (fs * 1.3) as usize, icon_y, HEADER);
-    // Sync button (top-right of header)
+    // Sync icon (top-right of header) — press r to refresh
     let sync_icon  = if state.syncing { "\u{F254}" } else { "\u{F021}" }; // spinner vs refresh
     let sync_color = if state.syncing { DIM } else { HEADER };
     let sync_w     = Canvas::measure(nerd, sync_icon, fs);
     let sync_x     = w.saturating_sub(PAD_X + sync_w);
     c.text(nerd, sync_icon, fs, sync_x, icon_y, sync_color);
+    // "r" hint to the left of the icon
+    if !state.syncing {
+        let hint_w = Canvas::measure(font, "r", label_size);
+        let hint_x = sync_x.saturating_sub(hint_w + PAD_X / 2);
+        c.text(font, "r", label_size, hint_x, icon_y, DIM);
+    }
     c.hline(0, header_h - 1, w, DIVIDER);
 
     if state.loading && state.items.is_empty() {
@@ -620,6 +627,13 @@ fn main() {
                                 }
                                 "ArrowLeft" => {
                                     s.browser_back = true;
+                                }
+                                "r" => {
+                                    if !s.syncing {
+                                        s.syncing = true;
+                                        s.dirty   = true;
+                                        do_force_refresh = true;
+                                    }
                                 }
                                 _ => {}
                             }

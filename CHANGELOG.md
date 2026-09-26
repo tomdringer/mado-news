@@ -3,6 +3,17 @@
 All notable changes to mado-news are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.2] - 2026-09-26
+
+### Added
+- `r` keyboard shortcut to refresh feeds — avoids the mouse-click focus issue
+  with the sync button; a dimmed `r` hint is shown to the left of the sync icon
+
+### Fixed
+- Sky News headlines now appear correctly — the source name lookup was matching
+  against a host string that included the `https://` scheme prefix, so it never
+  matched; updated to match `feeds.skynews.com` and `news-api.cf.sky.com`
+
 ## [0.1.1] - 2026-09-26
 
 ### Added
