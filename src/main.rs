@@ -2,6 +2,7 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -119,7 +120,16 @@ fn parse_feed(xml: &str, source: &str, max: usize) -> Vec<NewsItem> {
                 .or_else(|| extract_tag(chunk, "link"))
                 .unwrap_or_default()
         } else {
-            extract_tag(chunk, "link").unwrap_or_default()
+            // Some feeds (e.g. Sky News) use <guid> as the permalink; fall back to it
+            // when <link> is absent or not an http URL.
+            let link = extract_tag(chunk, "link").unwrap_or_default();
+            if link.trim_start().starts_with("http") {
+                link
+            } else {
+                extract_tag(chunk, "guid")
+                    .filter(|u| u.trim_start().starts_with("http"))
+                    .unwrap_or(link)
+            }
         };
         let url = url.trim().to_string();
 
@@ -205,6 +215,7 @@ fn url_to_source_name(url: &str) -> String {
         "feeds.bbci.co.uk"     => return "BBC".into(),
         "feeds.reuters.com"    => return "Reuters".into(),
         "feeds.arstechnica.com"=> return "Ars Technica".into(),
+        "news.sky.com"         => return "Sky News".into(),
         _ => {}
     }
     // Generic: take the first meaningful domain component
@@ -345,6 +356,7 @@ struct Event {
     kind:   String,
     width:  Option<u32>,
     height: Option<u32>,
+    x:      Option<f32>,
     y:      Option<f32>,
     delta:  Option<f32>,
     text:   Option<String>,
@@ -359,6 +371,7 @@ struct State {
     scroll:    usize,
     selected:  usize,
     loading:   bool,
+    syncing:   bool,
     dirty:     bool,
     navigate:      Option<String>,
     browser_back:  bool,
@@ -373,6 +386,7 @@ impl State {
             scroll:    0,
             selected:  0,
             loading:   true,
+            syncing:   false,
             dirty:     true,
             navigate:     None,
             browser_back: false,
@@ -414,6 +428,12 @@ fn render(state: &State, font: &fontdue::Font, nerd: &fontdue::Font, out: &mut i
     let icon_y = header_h - (fs * 0.5) as usize;
     c.text(nerd, "\u{F09E}", fs, PAD_X, icon_y, ACCENT);
     c.text(font, "NEWS", label_size, PAD_X + (fs * 1.3) as usize, icon_y, HEADER);
+    // Sync button (top-right of header)
+    let sync_icon  = if state.syncing { "\u{F254}" } else { "\u{F021}" }; // spinner vs refresh
+    let sync_color = if state.syncing { DIM } else { HEADER };
+    let sync_w     = Canvas::measure(nerd, sync_icon, fs);
+    let sync_x     = w.saturating_sub(PAD_X + sync_w);
+    c.text(nerd, sync_icon, fs, sync_x, icon_y, sync_color);
     c.hline(0, header_h - 1, w, DIVIDER);
 
     if state.loading && state.items.is_empty() {
@@ -489,11 +509,13 @@ fn main() {
     });
 
     let state: Arc<Mutex<State>> = Arc::new(Mutex::new(State::new(cfg.font_size)));
+    let force_refresh: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 
     // Feed fetcher thread
     {
-        let state = Arc::clone(&state);
-        let feeds = feeds.clone();
+        let state         = Arc::clone(&state);
+        let force_refresh = Arc::clone(&force_refresh);
+        let feeds         = feeds.clone();
         std::thread::spawn(move || loop {
             let mut all_items = Vec::new();
             for url in &feeds {
@@ -503,15 +525,22 @@ fn main() {
                 let mut s = state.lock().unwrap();
                 s.items   = all_items;
                 s.loading = false;
+                s.syncing = false;
                 s.dirty   = true;
             }
-            std::thread::sleep(Duration::from_secs(refresh_secs));
+            // Sleep in 1-second chunks so a manual refresh wakes us early
+            force_refresh.store(false, Ordering::Relaxed);
+            for _ in 0..refresh_secs {
+                std::thread::sleep(Duration::from_secs(1));
+                if force_refresh.load(Ordering::Relaxed) { break; }
+            }
         });
     }
 
     // Stdin event thread
     {
-        let state = Arc::clone(&state);
+        let state         = Arc::clone(&state);
+        let force_refresh = Arc::clone(&force_refresh);
         std::thread::spawn(move || {
             let stdin = std::io::stdin();
             for line in BufReader::new(stdin.lock()).lines().flatten() {
@@ -519,6 +548,8 @@ fn main() {
                     Ok(e) => e,
                     Err(_) => continue,
                 };
+                let mut do_force_refresh = false;
+                {
                 let mut s = state.lock().unwrap();
                 match ev.kind.as_str() {
                     "resize" => {
@@ -542,7 +573,18 @@ fn main() {
                             let item_h   = (s.font_size * 3.5) as usize;
                             let header_h = (s.font_size * 2.2) as usize;
                             let iy = y as usize;
-                            if item_h > 0 && iy >= header_h {
+                            if iy < header_h {
+                                // Click in header — right side is the sync button zone
+                                let w = s.w as usize;
+                                let sync_zone_x = w.saturating_sub(PAD_X * 3 + (s.font_size * 1.5) as usize);
+                                if let Some(x) = ev.x {
+                                    if x as usize >= sync_zone_x && !s.syncing {
+                                        s.syncing      = true;
+                                        s.dirty        = true;
+                                        do_force_refresh = true;
+                                    }
+                                }
+                            } else if item_h > 0 {
                                 let vi  = (iy - header_h) / item_h;
                                 let idx = s.scroll + vi;
                                 if idx < s.items.len() {
@@ -584,6 +626,10 @@ fn main() {
                         }
                     }
                     _ => {}
+                }
+                } // drop state lock
+                if do_force_refresh {
+                    force_refresh.store(true, Ordering::Relaxed);
                 }
             }
         });
