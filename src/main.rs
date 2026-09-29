@@ -360,9 +360,12 @@ fn send_browser_back(out: &mut impl Write) {
     out.flush().unwrap();
 }
 
-fn send_navigate(out: &mut impl Write, url: &str) {
-    let json = format!(r#"{{"action":"navigate","url":{}}}"#,
-        serde_json::to_string(url).unwrap_or_else(|_| "\"\"".into()));
+/// `select` asks Mado to move keyboard focus to the browser panel (→ key);
+/// hosts that don't know the field ignore it.
+fn send_navigate(out: &mut impl Write, url: &str, select: bool) {
+    let json = format!(r#"{{"action":"navigate","url":{}{}}}"#,
+        serde_json::to_string(url).unwrap_or_else(|_| "\"\"".into()),
+        if select { r#","select":true"# } else { "" });
     let bytes = json.as_bytes();
     out.write_all(b"MACT").unwrap();
     out.write_all(&(bytes.len() as u32).to_le_bytes()).unwrap();
@@ -395,7 +398,7 @@ struct State {
     loading:   bool,
     syncing:   bool,
     dirty:     bool,
-    navigate:      Option<String>,
+    navigate:      Option<(String, bool)>, // (url, select browser)
     browser_back:  bool,
     font_size: f32,
 }
@@ -624,7 +627,7 @@ fn main() {
                                 let idx = s.scroll + vi;
                                 if idx < s.items.len() {
                                     s.selected = idx;
-                                    s.navigate = Some(s.items[idx].url.clone());
+                                    s.navigate = Some((s.items[idx].url.clone(), false));
                                     s.dirty    = true;
                                 }
                             }
@@ -649,9 +652,17 @@ fn main() {
                                         s.dirty = true;
                                     }
                                 }
-                                "Return" | "\n" | "\r" | "ArrowRight" | "\u{F703}" => {
+                                // Enter opens the story and keeps focus here; →
+                                // opens it and moves focus to the browser.
+                                "Return" | "\n" | "\r" => {
                                     if let Some(item) = s.items.get(s.selected) {
-                                        s.navigate = Some(item.url.clone());
+                                        s.navigate = Some((item.url.clone(), false));
+                                        s.dirty    = true;
+                                    }
+                                }
+                                "ArrowRight" | "\u{F703}" => {
+                                    if let Some(item) = s.items.get(s.selected) {
+                                        s.navigate = Some((item.url.clone(), true));
                                         s.dirty    = true;
                                     }
                                 }
@@ -694,8 +705,8 @@ fn main() {
             (dirty, nav, back)
         };
 
-        if let Some(url) = nav_url {
-            send_navigate(&mut out, &url);
+        if let Some((url, select)) = nav_url {
+            send_navigate(&mut out, &url, select);
         }
         if go_back {
             send_browser_back(&mut out);

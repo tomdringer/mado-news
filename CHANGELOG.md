@@ -3,6 +3,11 @@
 All notable changes to mado-news are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.7] - 2026-09-29
+
+### Changed
+- → opens the story and asks Mado to select the browser panel (`"select": true` on the navigate action), so Enter then goes into the page; Enter in the list opens the story and keeps focus in the news list. Hosts that don't know the field ignore it
+
 ## [0.1.6] - 2026-09-29
 
 ### Fixed
