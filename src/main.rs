@@ -605,28 +605,30 @@ fn main() {
                     }
                     "key" => {
                         if let Some(ref text) = ev.text.clone() {
+                            // Mado sends Slint key text: arrows are U+F700–F703 and
+                            // Return is "\n". The names are kept for older hosts.
                             match text.as_str() {
-                                "ArrowDown" | "j" => {
+                                "ArrowDown" | "\u{F701}" | "j" => {
                                     if s.selected + 1 < s.items.len() {
                                         s.selected += 1;
                                         s.scroll_to_selected();
                                         s.dirty = true;
                                     }
                                 }
-                                "ArrowUp" | "k" => {
+                                "ArrowUp" | "\u{F700}" | "k" => {
                                     if s.selected > 0 {
                                         s.selected -= 1;
                                         s.scroll_to_selected();
                                         s.dirty = true;
                                     }
                                 }
-                                "Return" | "ArrowRight" => {
+                                "Return" | "\n" | "\r" | "ArrowRight" | "\u{F703}" => {
                                     if let Some(item) = s.items.get(s.selected) {
                                         s.navigate = Some(item.url.clone());
                                         s.dirty    = true;
                                     }
                                 }
-                                "ArrowLeft" => {
+                                "ArrowLeft" | "\u{F702}" => {
                                     s.browser_back = true;
                                 }
                                 "r" => {
