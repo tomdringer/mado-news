@@ -3,6 +3,11 @@
 All notable changes to mado-news are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.6] - 2026-09-29
+
+### Fixed
+- Linux release binaries are built on Ubuntu 22.04, so they run on systems with glibc 2.35 (previously they required glibc 2.39)
+
 ## [0.1.5] - 2026-09-29
 
 ### Changed
