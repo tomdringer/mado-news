@@ -3,6 +3,12 @@
 All notable changes to mado-news are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.5] - 2026-09-29
+
+### Changed
+- Headlines wrap onto up to two lines instead of being cut off after one; the second line ends in `...` if it still doesn't fit
+- Default `font_size` reduced from 22 to 18
+
 ## [0.1.4] - 2026-09-29
 
 ### Fixed

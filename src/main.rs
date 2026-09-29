@@ -15,8 +15,8 @@ struct NewsConfig {
     feeds:        Vec<String>,
     refresh_secs: u64,
     max_per_feed: usize,
-    /// Title font size in physical pixels. Default: 22.0.
-    /// On a 2× retina display, 22 physical ≈ 11pt. Increase for larger text.
+    /// Title font size in physical pixels. Default: 18.0.
+    /// On a 2× retina display, 18 physical ≈ 9pt. Increase for larger text.
     font_size:    f32,
 }
 
@@ -30,7 +30,7 @@ impl Default for NewsConfig {
             ],
             refresh_secs: 300,
             max_per_feed: 10,
-            font_size:    22.0,
+            font_size:    18.0,
         }
     }
 }
@@ -298,6 +298,26 @@ impl Canvas {
         }).sum()
     }
 
+    /// Split `text` at the last word boundary that fits in `max_w`, returning
+    /// (first line, remainder). Breaks mid-word if the first word alone is too wide.
+    fn split_line<'a>(font: &fontdue::Font, text: &'a str,
+                      size: f32, max_w: usize) -> (&'a str, &'a str) {
+        let mut used     = 0usize;
+        let mut last_fit = 0usize;
+        let mut last_sp  = None;
+        for (i, ch) in text.char_indices() {
+            if ch == ' ' { last_sp = Some(i); }
+            let (m, _) = font.rasterize(ch, size);
+            used += m.advance_width.round() as usize;
+            if used > max_w {
+                let cut = last_sp.filter(|&sp| sp > 0).unwrap_or(last_fit);
+                return (text[..cut].trim_end(), text[cut..].trim_start());
+            }
+            last_fit = i + ch.len_utf8();
+        }
+        (text, "")
+    }
+
     fn text_clipped(&mut self, font: &fontdue::Font, text: &str,
                     size: f32, x: usize, y: usize, color: [u8; 4],
                     max_w: usize) -> usize {
@@ -397,7 +417,7 @@ impl State {
     }
 
     fn scroll_to_selected(&mut self) {
-        let item_h      = (self.font_size * 3.5) as usize;
+        let item_h      = item_height(self.font_size);
         let header_h    = (self.font_size * 2.2) as usize;
         let visible_h   = (self.h as usize).saturating_sub(header_h);
         let max_visible = if item_h > 0 { visible_h / item_h } else { 1 };
@@ -410,6 +430,9 @@ impl State {
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
+/// Row height: source label plus two title lines.
+fn item_height(fs: f32) -> usize { (fs * 4.6) as usize }
+
 // Derived from font_size at render time — see render() for how they're computed.
 const PAD_X: usize = 14;
 
@@ -420,7 +443,7 @@ fn render(state: &State, font: &fontdue::Font, nerd: &fontdue::Font, out: &mut i
     let fs          = state.font_size;
     let title_size  = fs;
     let label_size  = (fs * 0.82).max(10.0);
-    let item_h      = (fs * 3.5) as usize;
+    let item_h      = item_height(fs);
     let header_h    = (fs * 2.2) as usize;
 
     let mut c = Canvas::new(w, h);
@@ -482,11 +505,15 @@ fn render(state: &State, font: &fontdue::Font, nerd: &fontdue::Font, out: &mut i
         let source_color = if is_selected { TEXT } else { ACCENT };
         c.text(font, &item.feed, label_size, PAD_X, label_y, source_color);
 
-        // Title (bottom of row)
-        let title_y     = iy + item_h - (fs * 0.6) as usize;
+        // Title — up to two lines, ellipsised on the second
+        let title_y     = iy + (fs * 2.3) as usize;
         let max_title_w = w.saturating_sub(PAD_X * 2);
-        c.text_clipped(font, &item.title, title_size,
-                       PAD_X, title_y, TEXT, max_title_w);
+        let (line1, line2) = Canvas::split_line(font, &item.title, title_size, max_title_w);
+        c.text(font, line1, title_size, PAD_X, title_y, TEXT);
+        if !line2.is_empty() {
+            c.text_clipped(font, line2, title_size,
+                           PAD_X, title_y + (fs * 1.3) as usize, TEXT, max_title_w);
+        }
 
         c.hline(PAD_X, iy + item_h - 1, w - PAD_X * 2, DIVIDER);
     }
