@@ -3,6 +3,14 @@
 All notable changes to mado-news are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.4] - 2026-09-29
+
+### Fixed
+- Arrow keys, Enter and back now work when the news panel has keyboard focus: Mado sends Slint key codes (U+F700–F703, `\n`), which were not matched before
+
+### Added
+- Release workflow: tagged versions publish prebuilt binaries for macOS, Linux (x86_64 and aarch64) and Windows, so `mado plugin install news` works on every platform
+
 ## [0.1.3] - 2026-09-26
 
 ### Changed
